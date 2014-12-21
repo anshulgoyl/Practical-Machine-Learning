@@ -1,0 +1,186 @@
+**Title: Practical Machine Learning Course Project**
+
+**Author: Anshul Goyal**
+
+**email: anshulgoyal2007@gmail.com**
+
+**Data Credit: Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.**
+
+**http://groupware.les.inf.puc-rio.br/har**
+
+# Introduction
+The goal of the project is to predict how well people do exercise on the basis of data collected by wearable devices such as Jawbone Up, Nike FuelBand, and Fitbit. 6 participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways. This information "classe" is the target of this project. Data from accelerometers on the belt, forearm, arm, and dumbell is used as explanatory data.
+
+# Preparing the workbench
+Loading all the packages and functions required for the project. 
+Set the working directory and loading the data
+
+- dev: Development data
+- pred: Prediction data
+``` {r, warning = FALSE, results='markup', message=FALSE}
+rm(list=ls())
+# Loading Packages
+library(ggplot2)
+library(caret)
+library(randomForest)
+library(gbm)
+library(mlearning)
+library(corrplot)
+
+# Functions
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+```
+
+###Load Data
+``` {r, warning = FALSE, results='markup', message=FALSE}
+# Working Directory
+setwd("C:/Users/anshul/Desktop/Education/C_p_m_l/assignment")
+
+#Data Load
+dev <- read.csv("pml-training.csv", na.strings = c("NA", ""))
+pred <- read.csv("pml-testing.csv", na.strings = c("NA", ""))
+
+```
+
+# Creating train and test data
+``` {r, warning = FALSE, results='markup', message=FALSE}
+# creating testing(70%) & training(30%)
+set.seed(1234)
+inTrain <- createDataPartition(y=dev$classe, p=0.7, list=F)
+training <- dev[inTrain,]
+testing <- dev[-inTrain,]
+```
+
+# Cleaning and variable selection
+### Removing index and timestamps variables
+``` {r, warning = FALSE, results='hide', message=FALSE}
+### Removing index and timestamps variables
+training <- training[,-(1:5)]
+testing <- testing[,-(1:5)]
+pred <- pred[,-(1:5)]
+```
+
+### Removing variables with excessive "NA", removing variables with over 90% missing
+``` {r, warning = FALSE, results='hide', message=FALSE}
+keep.vars <- (apply(is.na(training), 2, mean) <= 0.9)
+training <- training[,keep.vars]
+testing <- testing[,keep.vars]
+pred <- pred[,keep.vars] #last variable is problem_id
+names(training)==names(pred) #check for variable names in development data and prediction data
+```
+
+### Removing variables with nero zero variance
+``` {r}
+N <- nearZeroVar(training,saveMetrics=T)
+N[N$nzv==1,]
+```
+
+Removing following variable from predictors
+- new_window
+
+``` {r}
+training <- training[,-1]
+testing <- testing[,-1]
+pred <- pred[,-1] #last variable is problem_id
+```
+
+### Matching the class of variables in training and prediction dataset
+``` {r}
+type.summ <- matrix(0,dim(training)[2],5)
+colnames(type.summ) <- c("num","variable","same_class", "same_type", "type_training")
+for (i in 1:dim(training)[2]){
+  type.summ[i,1] <- i
+  type.summ[i,2] <- names(training)[i]
+  type.summ[i,3] <- (class(pred[,i]) == class(training[,i]))
+  type.summ[i,4] <- (typeof(pred[,i]) == typeof(training[,i]))
+  type.summ[i,5] <- class(training[,i])
+}
+
+print(type.summ[type.summ[,3]==F,])
+```
+
+Changing the class of variables in prediction dataset to make it consistent with training
+- magnet_dumbbell_z
+- magnet_forearm_y
+- magnet_forearm_z
+
+``` {r}
+pred[,40] <- as.numeric(pred[,40])
+pred[,52] <- as.numeric(pred[,52])
+pred[,53] <- as.numeric(pred[,53])
+```
+
+### Correlation of independent variables
+``` {r fig.width=12, fig.height=12}
+par(mfrow=c(2,2))
+M1 <- cor(training[,1:13])
+M2 <- cor(training[,14:26])
+M3 <- cor(training[,27:39])
+M4 <- cor(training[,40:53])
+corrplot(M1, method = "circle")
+corrplot(M2, method = "circle")
+corrplot(M3, method = "circle")
+corrplot(M4, method = "circle")
+```
+
+# Modeling
+Developing random forest with 100 trees and default parameters
+
+### Creating the modeling equation
+``` {r, warning = FALSE}
+# independent variables: total 53 independent variables
+var.ind <- names(training[,-54]) 
+#target variable
+var.tar <- "classe" 
+
+mdl.eq <- as.formula(paste(var.tar,"~", paste(c(var.ind), collapse = " + "), sep =""))
+print(mdl.eq)
+```
+
+### Random Forest
+``` {r, warning = FALSE, results='hide'}
+set.seed(1234)
+rf.mdl = randomForest(mdl.eq, data = training, ntree = 100, do.trace = T, importance= TRUE)
+
+# Prediction: classe_pred
+training$classe_pred <- predict(rf.mdl,training)
+testing$classe_pred <- predict(rf.mdl,testing)
+```
+
+### Variable Importance: Top 10 variables
+``` {r, warning = FALSE}
+var.imp <- rf.mdl$importance
+var.imp <- var.imp[order(-var.imp[,6]),]
+var.imp.mtr <- row.names(var.imp)[1:10]
+data.frame(var.imp.mtr)
+```
+
+### Feature plot of top 10 variables
+```{r, warning = FALSE, fig.width=9, fig.height=9}
+featurePlot(x=training[,c("num_window","magnet_dumbbell_y","roll_belt", "magnet_dumbbell_z", "yaw_belt")],y=training$classe ,plot="pairs")
+
+featurePlot(x=training[,c("roll_forearm","magnet_dumbbell_x","pitch_belt", "pitch_forearm", "roll_dumbbell")],y=training$classe ,plot="pairs")
+```
+
+### confusion Matrix
+``` {r, warning = FALSE}
+print(confusionMatrix(testing$classe_pred,testing$classe))
+print(confusionMatrix(testing$classe_pred,testing$classe))
+```
+**Expected out of sample accuracy is 99.8%**
+
+# Prediction (on out of sample 20 records)
+``` {r, warning = FALSE}
+
+pred$classe_pred <- predict(rf.mdl, pred)
+pred <- pred[order(pred$problem_id),]
+answers = pred$classe_pred
+pml_write_files(answers)
+
+```
