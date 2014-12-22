@@ -26,6 +26,7 @@ library(randomForest)
 library(gbm)
 library(mlearning)
 library(corrplot)
+library(lattice)
 
 # Functions
 pml_write_files = function(x){
@@ -143,10 +144,44 @@ mdl.eq <- as.formula(paste(var.tar,"~", paste(c(var.ind), collapse = " + "), sep
 print(mdl.eq)
 ```
 
-### Random Forest
+### Cross validation for tuning mtry
+5 fold cross validation to choose mtry
+
+``` {r, warning = FALSE}
+set.seed(5758)
+folds <- createFolds(y=training$classe, k=5, list=T, returnTrain=T)
+mtry.lst <- c("6","8", "10")
+track.mtx <- matrix(0,length(mtry.lst)*5,4)
+colnames(track.mtx) <- c("mtry","fold","train_accuracy", "test_accuracy")
+for (mm in 1:length(mtry.lst)){
+  for (ii in 1:5){
+    mtry.lst.num <- as.numeric(mtry.lst[mm])
+    rf.tr <- training[folds[[ii]],]
+    rf.ts <- training[-folds[[ii]],]
+    
+    rf.mdl.cr.val = randomForest(mdl.eq, data = rf.tr, ntree = 100, mtry=mtry.lst.num)
+
+    rf.tr$classe_pred_cr <- predict(rf.mdl.cr.val,rf.tr)
+    rf.ts$classe_pred_cr <- predict(rf.mdl.cr.val,rf.ts)
+    track.mtx[(mm-1)*5+ii,1] <- mtry.lst.num
+    track.mtx[(mm-1)*5+ii,2] <- ii
+    track.mtx[(mm-1)*5+ii,3] <- table(rf.tr$classe_pred_cr==rf.tr$classe)[2]/dim(rf.tr)[1]
+    track.mtx[(mm-1)*5+ii,4] <- table(rf.ts$classe_pred_cr==rf.ts$classe)[2]/dim(rf.ts)[1]
+  }
+}
+
+# Plot the results from cross validation
+barchart(factor(mtry) ~ test_accuracy,data=as.data.frame(track.mtx),groups=fold)
+mean(track.mtx[1:5,4])
+mean(track.mtx[6:10,4])
+mean(track.mtx[11:15,4])
+mtry.best <- 10
+```
+
+### Final Random Forest
 ``` {r, warning = FALSE, results='hide'}
 set.seed(1234)
-rf.mdl = randomForest(mdl.eq, data = training, ntree = 100, do.trace = T, importance= TRUE)
+rf.mdl = randomForest(mdl.eq, data = training, ntree = 100, mtry =mtry.best, do.trace = T, importance= TRUE)
 
 # Prediction: classe_pred
 training$classe_pred <- predict(rf.mdl,training)
