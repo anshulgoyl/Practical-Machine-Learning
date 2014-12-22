@@ -363,8 +363,9 @@ print(mdl.eq)
 ##     magnet_forearm_z
 </code></pre>
 
-<p>###Cross validation for tuning mtry
-5 fold cross validation to choose mtry</p>
+<h3>Cross validation for tuning mtry</h3>
+
+<p>5 fold cross validation to choose mtry</p>
 
 <pre><code class="r">set.seed(5758)
 folds &lt;- createFolds(y=training$classe, k=5, list=T, returnTrain=T)
@@ -415,7 +416,7 @@ barchart(factor(mtry) ~ test_accuracy,data=as.data.frame(track.mtx),groups=fold)
 <pre><code class="r">mtry.best &lt;- 10
 </code></pre>
 
-<p>###Final Random Forest</p>
+<h3>Final Random Forest</h3>
 
 <pre><code class="r">set.seed(1234)
 rf.mdl = randomForest(mdl.eq, data = training, ntree = 100, mtry =mtry.best, do.trace = T, importance= TRUE)
